@@ -2,169 +2,192 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<meta name="theme-color" content="#12161b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Narration Booth</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout: a recording booth. Left: the script as a list of lines with their status. Right: the prompter
-   (current line large), the transport (record / play / keep) and the takes of this line. */
+/* Layout: phone-first booth that never scrolls as a page. Top bar (progress), stage (the line to read,
+   its takes, the next line), and a bottom dock of thumb-sized transport buttons. The line list and the
+   menu open as sheets over the stage. */
 :root {
   --bg: #eef0f2; --panel: #ffffff; --ink: #1b2129; --muted: #5d6773; --line: #d5dae0;
   --accent: #c27a12; --accent-ink: #ffffff; --accent-soft: #f6e6cb;
-  --rec: #c8202b; --rec-soft: #f8d9db; --ok: #2f7a4d; --ok-soft: #d8efe1;
+  --rec: #d0222e; --rec-soft: #f8d9db; --ok: #2f7a4d; --ok-soft: #d8efe1; --scrim: rgba(10, 14, 18, .45);
   --sans: "IBM Plex Sans", system-ui, sans-serif; --ar: "IBM Plex Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 @media (prefers-color-scheme: dark) { :root {
   --bg: #12161b; --panel: #1b2027; --ink: #e6e9ed; --muted: #9aa4b0; --line: #2c333c;
   --accent: #e5a13a; --accent-ink: #1b1206; --accent-soft: #3a2b12;
-  --rec: #ff5c66; --rec-soft: #3d1a1d; --ok: #6fcf97; --ok-soft: #143222; color-scheme: dark } }
-* { box-sizing: border-box }
+  --rec: #ff4d59; --rec-soft: #3d1a1d; --ok: #6fcf97; --ok-soft: #143222; --scrim: rgba(0, 0, 0, .6); color-scheme: dark } }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent }
 [hidden] { display: none !important }
-html, body { height: 100% }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans);
-  padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(16px, env(safe-area-inset-left, 0px)) }
-button, input, textarea, select { font: inherit; color: inherit }
-button { cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); padding: 8px 14px }
+html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none }
+body { background: var(--bg); color: var(--ink); font: 16px/1.5 var(--sans);
+  display: grid; grid-template-rows: auto 1fr auto; height: 100dvh; max-width: 760px; margin: 0 auto }
+button, input, textarea { font: inherit; color: inherit }
+button { cursor: pointer; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); padding: 10px 14px; touch-action: manipulation; user-select: none }
 button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
-button:disabled { opacity: .45; cursor: default }
+button:disabled { opacity: .4; cursor: default }
 .primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600 }
-.kbd { font-family: var(--mono); font-size: .75rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 6px }
-.primary .kbd, .rec .kbd { color: inherit; border-color: currentColor; opacity: .8 }
-.app { max-width: 1200px; margin: 0 auto; padding-block: 18px 28px; display: grid; gap: 16px }
-header { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline; justify-content: space-between }
-h1 { margin: 0; font-size: 1.35rem; font-weight: 600; letter-spacing: -.01em }
-.stat { font-family: var(--mono); font-size: .85rem; color: var(--muted) }
-.stat b { color: var(--ink); font-weight: 500 }
-.grid { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 16px; align-items: start }
-@media (max-width: 820px) { .grid { grid-template-columns: 1fr } .booth { order: -1 } .list { max-height: 30vh } .prompter { min-height: 4em } }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px }
-.list { max-height: calc(100vh - 140px); overflow: auto; display: grid; gap: 6px; padding: 8px }
-.item { all: unset; display: grid; grid-template-columns: 2.2em 1fr auto; gap: 8px; align-items: start; padding: 8px; border-radius: 8px; cursor: pointer }
-.item:hover { background: var(--accent-soft) }
-.item:focus-visible { outline: 2px solid var(--accent) }
-.item.cur { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent) }
-.item .n { font-family: var(--mono); font-size: .8rem; color: var(--muted); padding-top: 2px }
-.item .t { direction: rtl; text-align: right; font-family: var(--ar); font-size: .95rem; line-height: 1.7; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical }
-.dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--line); margin-top: 6px }
-.dot.has { border-color: var(--accent) }
-.dot.kept { background: var(--ok); border-color: var(--ok) }
-.booth { display: grid; gap: 14px }
-.prompter { direction: rtl; text-align: right; font-family: var(--ar); font-size: clamp(1.4rem, 2.6vw, 2rem); line-height: 1.9; font-weight: 500; min-height: 5.5em }
-.next { direction: rtl; text-align: right; font-family: var(--ar); color: var(--muted); font-size: 1rem; line-height: 1.8; border-top: 1px dashed var(--line); padding-top: 8px }
-.next::before { content: "Next: "; direction: ltr; font-family: var(--sans); font-size: .8rem; letter-spacing: .04em; text-transform: uppercase }
-.meta { display: flex; justify-content: space-between; font-family: var(--mono); font-size: .8rem; color: var(--muted) }
-.transport { display: flex; flex-wrap: wrap; gap: 10px; align-items: center }
-.rec { background: var(--rec); border-color: var(--rec); color: #fff; font-weight: 600; min-width: 11em }
-.rec.on { animation: pulse 1.2s infinite }
-@keyframes pulse { 50% { box-shadow: 0 0 0 6px var(--rec-soft) } }
-@media (prefers-reduced-motion: reduce) { .rec.on { animation: none; outline: 3px solid var(--rec-soft) } }
-.meter { flex: 1; min-width: 140px; height: 10px; border-radius: 999px; background: var(--line); overflow: hidden }
+
+/* top bar */
+.top { padding: calc(env(safe-area-inset-top, 0px) + 10px) max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px));
+  display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; border-bottom: 1px solid var(--line) }
+.top .t { min-width: 0 }
+.top h1 { margin: 0; font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.top .p { font-family: var(--mono); font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums }
+.bar { grid-column: 1 / -1; height: 4px; border-radius: 4px; background: var(--line); overflow: hidden }
+.bar > i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .2s }
+.top button { padding: 8px 12px; font-size: .9rem }
+
+/* stage */
+.stage { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px max(16px, env(safe-area-inset-right, 0px)) 14px max(16px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 14px; min-height: 0 }
+.pos { display: flex; justify-content: space-between; font-family: var(--mono); font-size: .78rem; color: var(--muted) }
+.prompter { direction: rtl; text-align: right; font-family: var(--ar); font-size: clamp(1.45rem, 6.2vw, 2rem); line-height: 1.85; font-weight: 500 }
+.takes { display: flex; flex-wrap: wrap; gap: 8px }
+.take { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 6px 6px 6px 12px; border: 1px solid var(--line); background: var(--panel) }
+.take.kept { border-color: var(--ok); background: var(--ok-soft) }
+.take .l { font-size: .85rem; font-weight: 600 }
+.take .d { font-family: var(--mono); font-size: .78rem; color: var(--muted) }
+.take button { padding: 6px 10px; border-radius: 999px; font-size: .8rem }
+.next { direction: rtl; text-align: right; font-family: var(--ar); color: var(--muted); font-size: 1rem; line-height: 1.8; border-top: 1px dashed var(--line); padding-top: 10px; margin-top: auto }
+.next .lab { direction: ltr; display: block; text-align: left; font-family: var(--sans); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase }
+.note { font-size: .85rem; color: var(--muted) }
+.note.warn { color: var(--rec) }
+
+/* dock */
+.dock { padding: 10px max(12px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 12px) max(12px, env(safe-area-inset-left, 0px));
+  border-top: 1px solid var(--line); background: var(--panel); display: grid; gap: 10px }
+.meterRow { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums }
+.meter { flex: 1; height: 8px; border-radius: 8px; background: var(--line); overflow: hidden }
 .meter > i { display: block; height: 100%; width: 0; background: var(--ok) }
 .meter.hot > i { background: var(--rec) }
-.takes { display: grid; gap: 8px }
-.take { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px }
-.take.kept { border-color: var(--ok); background: var(--ok-soft) }
-.take .lbl { font-weight: 600 }
-.take .d { font-family: var(--mono); font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums }
-.take .sp { flex: 1 }
-.hint { color: var(--muted); font-size: .85rem }
-.warn { color: var(--rec); font-size: .85rem }
-.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center }
-textarea { width: 100%; min-height: 220px; direction: rtl; font-family: var(--ar); font-size: 1rem; line-height: 1.8; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--bg) }
-label { font-size: .9rem }
-input[type=number] { width: 6em; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; background: var(--bg) }
-.setup { display: grid; gap: 12px; max-width: 900px }
-.setup h2 { margin: 0; font-size: 1.05rem }
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: .9rem }
+.controls { display: grid; grid-template-columns: 1fr 1fr auto 1fr 1fr; gap: 8px; align-items: center }
+.controls button { min-height: 56px; padding: 6px; display: grid; place-items: center; gap: 2px; font-size: .72rem; color: var(--muted) }
+.controls button svg { width: 24px; height: 24px; fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
+.controls .keep { background: var(--accent); border-color: var(--accent); color: var(--accent-ink) }
+.controls .keep svg { stroke: var(--accent-ink) }
+.rec { width: 78px; height: 78px; min-height: 78px; border-radius: 50%; background: var(--rec); border: 4px solid var(--panel); box-shadow: 0 0 0 2px var(--rec); padding: 0 }
+.rec i { display: block; width: 30px; height: 30px; border-radius: 50%; background: #fff; transition: border-radius .15s, width .15s, height .15s }
+.rec.on { animation: pulse 1.2s infinite }
+.rec.on i { width: 26px; height: 26px; border-radius: 6px }
+@keyframes pulse { 50% { box-shadow: 0 0 0 8px var(--rec-soft) } }
+
+/* sheets */
+.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 20 }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; max-width: 760px; margin: 0 auto; max-height: 82dvh; z-index: 21; background: var(--panel);
+  border-radius: 18px 18px 0 0; display: grid; grid-template-rows: auto 1fr; padding-bottom: env(safe-area-inset-bottom, 0px) }
+.sheet header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 8px; font-weight: 600 }
+.sheet .body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 12px 16px; display: grid; gap: 8px; align-content: start }
+.item { all: unset; display: grid; grid-template-columns: 2.2em 1fr 14px; gap: 8px; align-items: start; padding: 10px; border-radius: 10px; cursor: pointer }
+.item.cur { background: var(--accent-soft) }
+.item .n { font-family: var(--mono); font-size: .8rem; color: var(--muted); padding-top: 3px }
+.item .tx { direction: rtl; text-align: right; font-family: var(--ar); font-size: .98rem; line-height: 1.7; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical }
+.dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); margin-top: 7px }
+.dot.has { border-color: var(--accent) }
+.dot.kept { background: var(--ok); border-color: var(--ok) }
+.menu .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center }
+.menu button { min-height: 48px }
+label { font-size: .95rem }
+input[type=number] { width: 6em; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg) }
+input[type=checkbox] { width: 20px; height: 20px; vertical-align: -4px }
+textarea { width: 100%; min-height: 40dvh; direction: rtl; font-family: var(--ar); font-size: 1rem; line-height: 1.8; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--bg) }
+.hint { color: var(--muted); font-size: .88rem; margin: 0 }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 150px); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 10px; font-size: .9rem; z-index: 30 }
+@media (prefers-reduced-motion: reduce) { .rec.on { animation: none } .bar > i, .rec i { transition: none } }
+@media (min-width: 761px) { body { border-left: 1px solid var(--line); border-right: 1px solid var(--line) } }
 </style>
 </head>
 <body>
-<div class="app">
-  <header>
-    <h1 id="title">Narration Booth</h1>
-    <div class="row">
-      <span class="stat">Kept <b id="nKept">0</b> / <b id="nLines">0</b></span>
-      <span class="stat">Recorded <b id="dur">0:00</b></span>
-      <button id="btnExport" type="button" class="primary" disabled>Export narration</button>
-      <button id="btnZip" type="button" disabled>Export lines (zip)</button>
-      <button id="btnScript" type="button">Script</button>
-    </div>
-  </header>
+  <div class="top">
+    <div class="t"><h1 id="title" dir="auto">Narration Booth</h1><div class="p" id="prog">0 / 0 kept · 0:00</div></div>
+    <button id="btnLines" type="button" aria-haspopup="dialog">Lines</button>
+    <button id="btnMenu" type="button" aria-haspopup="dialog">Menu</button>
+    <div class="bar"><i id="barFill"></i></div>
+  </div>
 
-  <section id="setup" class="card setup" hidden>
-    <h2>Script</h2>
-    <p class="hint">Paste the script (Darija in Arabic letters is fine). Blank lines separate paragraphs. Lines starting with # are titles and are not recorded. It is split into short lines to record one at a time.</p>
-    <textarea id="scriptIn" aria-label="Script" spellcheck="false"></textarea>
-    <div class="row">
-      <label for="maxChars">Line length (characters, about 12 per second):</label>
-      <input id="maxChars" type="number" min="40" max="600" step="10" value="160">
-      <label><input id="byPara" type="checkbox"> one paragraph per line</label>
-      <button id="btnLoad" type="button" class="primary">Use this script</button>
-      <label for="scriptFile">or open a .txt file:</label>
-      <input id="scriptFile" type="file" accept=".txt,.md,text/plain">
+  <main class="stage" id="stage">
+    <div class="pos"><span id="pos">Line 1</span><span id="est"></span></div>
+    <div class="prompter" id="prompter" lang="ar"></div>
+    <div class="takes" id="takes" aria-label="Takes of this line"></div>
+    <p class="note" id="micNote">Tap the red button to record this line. Your browser asks for the microphone once. Nothing leaves this phone until you export.</p>
+    <div class="next" id="next" lang="ar"></div>
+  </main>
+
+  <div class="dock">
+    <div class="meterRow"><div class="meter" id="meter" aria-hidden="true"><i></i></div><span id="timer">0:00</span></div>
+    <div class="controls">
+      <button id="btnPrev" type="button" aria-label="Previous line"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>Back</button>
+      <button id="btnPlay" type="button" aria-label="Play take" disabled><svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>Play</button>
+      <button id="btnRec" type="button" class="rec" aria-label="Record"><i></i></button>
+      <button id="btnKeep" type="button" class="keep" aria-label="Keep and go to next line" disabled><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Keep</button>
+      <button id="btnNext" type="button" aria-label="Next line"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>Skip</button>
     </div>
-    <p class="warn" id="setupWarn" hidden>Loading a new script starts a new session. Recordings of the current script stay saved in this browser and come back if you load the same script again.</p>
+  </div>
+
+  <!-- lines sheet -->
+  <div class="scrim" id="scrim" hidden></div>
+  <section class="sheet" id="sheetLines" role="dialog" aria-label="Lines" hidden>
+    <header><span>Lines</span><button type="button" data-close>Close</button></header>
+    <div class="body" id="list"></div>
   </section>
 
-  <div id="main" class="grid">
-    <nav class="card list" id="list" aria-label="Lines"></nav>
-    <section class="card booth" aria-label="Booth">
-      <div class="meta"><span id="pos">Line 1</span><span id="est"></span></div>
-      <div class="prompter" id="prompter" lang="ar"></div>
-      <div class="transport">
-        <button id="btnRec" type="button" class="rec">Record<span class="kbd">R</span></button>
-        <button id="btnPlay" type="button" disabled>Play<span class="kbd">P</span></button>
-        <button id="btnFlow" type="button" disabled title="Plays the end of the previous line, then this one">Play with previous<span class="kbd">F</span></button>
-        <button id="btnKeep" type="button" class="primary" disabled>Keep &amp; next<span class="kbd">Enter</span></button>
-        <div class="meter" id="meter" aria-hidden="true"><i></i></div>
-      </div>
-      <p class="hint" id="micNote">Press Record (or R) to start the microphone. Your browser will ask for permission once. Nothing leaves this computer until you export.</p>
-      <div class="takes" id="takes"></div>
-      <div class="next" id="next" lang="ar"></div>
-      <div class="row hint">
-        <span>Keys: <span class="kbd">R</span> record/stop <span class="kbd">P</span> play <span class="kbd">Enter</span> keep &amp; next <span class="kbd">←</span><span class="kbd">→</span> lines <span class="kbd">Del</span> delete last take</span>
-      </div>
-      <div class="row">
-        <label><input id="trim" type="checkbox" checked> trim silence at the start and end of each take</label>
-        <label for="gap">Pause between lines in the export (ms):</label>
-        <input id="gap" type="number" min="0" max="3000" step="50" value="400">
-      </div>
-    </section>
-  </div>
-</div>
-<div class="toast" id="toast" hidden></div>
+  <!-- menu sheet -->
+  <section class="sheet menu" id="sheetMenu" role="dialog" aria-label="Menu" hidden>
+    <header><span>Menu</span><button type="button" data-close>Close</button></header>
+    <div class="body">
+      <div class="row"><button id="btnExport" type="button" class="primary">Export narration (WAV)</button><button id="btnZip" type="button">Export lines (zip)</button></div>
+      <p class="hint" id="exportNote">Kept takes joined in order. Then upload the WAV to rvc_project/input in Google Drive.</p>
+      <div class="row"><label for="gap">Pause between lines (ms)</label><input id="gap" type="number" inputmode="numeric" min="0" max="3000" step="50" value="400"></div>
+      <div class="row"><label><input id="trim" type="checkbox" checked> trim silence at the start and end of each take</label></div>
+      <div class="row"><label><input id="autoPlay" type="checkbox" checked> play each take back after recording</label></div>
+      <div class="row"><button id="btnPlayFlow" type="button">Play end of previous line + this take</button></div>
+      <div class="row"><button id="btnScript" type="button">Load another script</button></div>
+    </div>
+  </section>
 
-<!-- The agent may embed a prepared script here: {"title": "...", "text": "..."} -->
+  <!-- script sheet -->
+  <section class="sheet" id="sheetScript" role="dialog" aria-label="Script" hidden>
+    <header><span>Script</span><button type="button" data-close id="scriptClose">Close</button></header>
+    <div class="body">
+      <p class="hint">Open a .txt file or paste the script. Blank lines separate paragraphs; lines starting with # are titles and are not recorded. Your recordings of other scripts stay saved on this phone.</p>
+      <div class="row"><input id="scriptFile" type="file" accept=".txt,.md,text/plain"></div>
+      <textarea id="scriptIn" aria-label="Script" spellcheck="false"></textarea>
+      <div class="row"><label for="maxChars">Line length (characters)</label><input id="maxChars" type="number" inputmode="numeric" min="40" max="600" step="10" value="160">
+        <label><input id="byPara" type="checkbox"> one paragraph per line</label></div>
+      <div class="row"><button id="btnLoad" type="button" class="primary">Use this script</button></div>
+    </div>
+  </section>
+  <div class="toast" id="toast" role="status" hidden></div>
+
 <script type="application/json" id="preset">null</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 "use strict";
-// ---------- state ----------
-let S = null;               // {id, title, lines: [text], cur, takes: {lineIdx: [{id, sr, dur}]}, kept: {lineIdx: takeId}}
-const audioCache = new Map(); // takeId -> Float32Array
+let S = null;                    // {id, title, lines, cur, takes: {i: [{id, sr, dur}]}, kept: {i: takeId}}
+const audioCache = new Map();
 const $ = s => document.querySelector(s);
 const toast = t => { const e = $("#toast"); e.textContent = t; e.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => e.hidden = true, 2200); };
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+const buzz = ms => { try { navigator.vibrate?.(ms); } catch {} };
 
-// ---------- storage (IndexedDB: survives reloads; everything stays in this browser) ----------
+// ---------- storage: IndexedDB on this device (survives reloads) ----------
 let idb = null;
-function openDB() {
-  return new Promise(res => {
-    try {
-      const r = indexedDB.open("narration-booth", 1);
-      r.onupgradeneeded = () => { r.result.createObjectStore("sessions"); r.result.createObjectStore("audio"); };
-      r.onsuccess = () => res(r.result); r.onerror = () => res(null);
-    } catch { res(null); }
-  });
-}
-function dbPut(store, key, val) { if (!idb) return Promise.resolve(); return new Promise(r => { try { const t = idb.transaction(store, "readwrite"); t.objectStore(store).put(val, key); t.oncomplete = r; t.onerror = r; } catch { r(); } }); }
-function dbGet(store, key) { if (!idb) return Promise.resolve(undefined); return new Promise(r => { try { const q = idb.transaction(store).objectStore(store).get(key); q.onsuccess = () => r(q.result); q.onerror = () => r(undefined); } catch { r(undefined); } }); }
-function dbDel(store, key) { if (!idb) return Promise.resolve(); return new Promise(r => { try { const t = idb.transaction(store, "readwrite"); t.objectStore(store).delete(key); t.oncomplete = r; t.onerror = r; } catch { r(); } }); }
+function openDB() { return new Promise(res => { try { const r = indexedDB.open("narration-booth", 1);
+  r.onupgradeneeded = () => { r.result.createObjectStore("sessions"); r.result.createObjectStore("audio"); };
+  r.onsuccess = () => res(r.result); r.onerror = () => res(null); } catch { res(null); } }); }
+function dbPut(st, k, v) { if (!idb) return Promise.resolve(); return new Promise(r => { try { const t = idb.transaction(st, "readwrite"); t.objectStore(st).put(v, k); t.oncomplete = r; t.onerror = r; } catch { r(); } }); }
+function dbGet(st, k) { if (!idb) return Promise.resolve(undefined); return new Promise(r => { try { const q = idb.transaction(st).objectStore(st).get(k); q.onsuccess = () => r(q.result); q.onerror = () => r(undefined); } catch { r(undefined); } }); }
+function dbDel(st, k) { if (!idb) return Promise.resolve(); return new Promise(r => { try { const t = idb.transaction(st, "readwrite"); t.objectStore(st).delete(k); t.oncomplete = r; t.onerror = r; } catch { r(); } }); }
 const saveSession = () => { if (S) { dbPut("sessions", S.id, S); try { localStorage.setItem("booth-last", S.id); } catch {} } };
 
-// ---------- script splitting ----------
+// ---------- script ----------
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
 function split(text, maxChars, byPara) {
   const paras = text.replace(/\r/g, "").split(/\n\s*\n/).map(p => p.split("\n").filter(l => l.trim() && !l.trim().startsWith("#")).join(" ").trim()).filter(Boolean);
@@ -173,57 +196,55 @@ function split(text, maxChars, byPara) {
   for (const p of paras) {
     const sents = p.match(/[^.!؟?…]+(?:[.!؟?…]+|$)/g)?.map(s => s.trim()).filter(Boolean) || [p];
     let cur = "";
-    for (const s of sents) {
-      if (cur && (cur + " " + s).length > maxChars) { out.push(cur); cur = s; } else cur = cur ? cur + " " + s : s;
-    }
+    for (const s of sents) { if (cur && (cur + " " + s).length > maxChars) { out.push(cur); cur = s; } else cur = cur ? cur + " " + s : s; }
     if (cur) out.push(cur);
   }
   return out;
 }
+function titleOf(text) { const m = text.match(/^\s*#\s*(.+)$/m); return m ? m[1].trim() : ""; }
 async function loadScript(title, text, maxChars, byPara) {
   const lines = split(text, maxChars, byPara);
   if (!lines.length) { toast("The script is empty"); return; }
   const id = hash(lines.join("\n"));
-  S = (await dbGet("sessions", id)) || { id, title: title || "Narration Booth", lines, cur: 0, takes: {}, kept: {} };
-  saveSession(); $("#setup").hidden = true; $("#main").hidden = false; renderAll();
+  S = (await dbGet("sessions", id)) || { id, title: title || titleOf(text) || "Narration Booth", lines, cur: 0, takes: {}, kept: {} };
+  $("#scriptClose").hidden = false; saveSession(); closeSheets(); renderAll();
 }
 
-// ---------- microphone + recording (raw PCM: no echo cancellation, noise suppression or auto gain) ----------
-let ctx = null, stream = null, proc = null, recording = false, chunks = [], meterLevel = 0;
+// ---------- microphone (raw: no echo cancellation, noise suppression or auto gain) ----------
+let ctx = null, stream = null, recording = false, chunks = [], meterLevel = 0, recStart = 0, wake = null;
+function audioCtx() { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); return ctx; }
 async function ensureMic() {
   if (stream) return true;
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-    $("#micNote").textContent = "This browser only allows the microphone on pages opened from an https:// address (a phone opening a downloaded file can't record). Open the booth from its web address instead, or open the file on a computer.";
-    $("#micNote").className = "warn"; return false;
+    note("Recording needs the booth's https:// address (a downloaded file can't use the microphone on a phone).", true); return false;
   }
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
-  } catch (e) { $("#micNote").textContent = "The microphone is blocked. Allow it in the browser's address bar, then press Record again. (Open this file in Chrome, Edge or Firefox; it can't record inside a Claude page.)"; $("#micNote").className = "warn"; return false; }
-  ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const src = ctx.createMediaStreamSource(stream);
-  proc = ctx.createScriptProcessor(4096, 1, 1);
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } }); }
+  catch { note("The microphone is blocked: allow it for this site in the browser settings, then tap record again.", true); return false; }
+  const c = audioCtx(), src = c.createMediaStreamSource(stream), proc = c.createScriptProcessor(4096, 1, 1);
   proc.onaudioprocess = e => {
-    const d = e.inputBuffer.getChannelData(0);
-    let pk = 0; for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > pk) pk = a; }
+    const d = e.inputBuffer.getChannelData(0); let pk = 0;
+    for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > pk) pk = a; }
     meterLevel = Math.max(pk, meterLevel * 0.85);
     if (recording) chunks.push(new Float32Array(d));
   };
-  src.connect(proc); proc.connect(ctx.destination);   // destination gets silence (output buffer untouched = zeros)
-  const label = stream.getAudioTracks()[0]?.label || "microphone";
-  $("#micNote").textContent = `Recording from: ${label} · ${ctx.sampleRate} Hz. Nothing leaves this computer until you export.`; $("#micNote").className = "hint";
-  requestAnimationFrame(drawMeter);
+  src.connect(proc); proc.connect(c.destination);
+  note(`Microphone: ${stream.getAudioTracks()[0]?.label || "default"} · ${c.sampleRate} Hz. Nothing leaves this phone until you export.`);
+  requestAnimationFrame(tick);
   return true;
 }
-function drawMeter() {
+function note(t, warn) { const n = $("#micNote"); n.textContent = t; n.classList.toggle("warn", !!warn); }
+function tick() {
   const m = $("#meter"); m.firstElementChild.style.width = Math.min(100, meterLevel * 100) + "%"; m.classList.toggle("hot", meterLevel > 0.95);
-  requestAnimationFrame(drawMeter);
+  if (recording) $("#timer").textContent = fmt((performance.now() - recStart) / 1000);
+  requestAnimationFrame(tick);
 }
-function trimEdges(x, sr) {
-  // cut only leading/trailing room tone: threshold = 4x the quietest 50 ms window, 150 ms kept on each side
+async function keepAwake() { try { if (!wake && navigator.wakeLock) { wake = await navigator.wakeLock.request("screen"); wake.addEventListener("release", () => wake = null); } } catch {} }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && stream) keepAwake(); });
+function trimEdges(x, sr) {   // cut only room tone before/after the speech; 150 ms kept each side
   const w = Math.floor(sr * 0.05), n = Math.floor(x.length / w); if (n < 4) return x;
   const rms = []; for (let i = 0; i < n; i++) { let s = 0; for (let j = i * w; j < (i + 1) * w; j++) s += x[j] * x[j]; rms.push(Math.sqrt(s / w)); }
   const floor = Math.max(1e-4, [...rms].sort((a, b) => a - b)[Math.floor(n * 0.05)]), thr = floor * 4;
-  let a = rms.findIndex(v => v > thr), b = n - 1 - [...rms].reverse().findIndex(v => v > thr);
+  const a = rms.findIndex(v => v > thr), b = n - 1 - [...rms].reverse().findIndex(v => v > thr);
   if (a < 0) return x;
   const pad = Math.floor(sr * 0.15);
   return x.slice(Math.max(0, a * w - pad), Math.min(x.length, (b + 1) * w + pad));
@@ -233,17 +254,20 @@ async function toggleRec() {
   if (!recording) {
     if (!(await ensureMic())) return;
     if (ctx.state === "suspended") await ctx.resume();
-    stopPlay(); chunks = []; recording = true;
-    $("#btnRec").classList.add("on"); $("#btnRec").firstChild.textContent = "Stop";
+    stopPlay(); chunks = []; recording = true; recStart = performance.now(); keepAwake(); buzz(25);
+    $("#btnRec").classList.add("on"); $("#btnRec").setAttribute("aria-label", "Stop recording");
+    setDisabled();
   } else {
-    recording = false; $("#btnRec").classList.remove("on"); $("#btnRec").firstChild.textContent = "Record";
-    let len = chunks.reduce((n, c) => n + c.length, 0); let x = new Float32Array(len), o = 0; for (const c of chunks) { x.set(c, o); o += c.length; }
+    recording = false; buzz([15, 40, 15]);
+    $("#btnRec").classList.remove("on"); $("#btnRec").setAttribute("aria-label", "Record");
+    let len = chunks.reduce((n, c) => n + c.length, 0), x = new Float32Array(len), o = 0; for (const c of chunks) { x.set(c, o); o += c.length; }
     if ($("#trim").checked) x = trimEdges(x, ctx.sampleRate);
-    if (x.length < ctx.sampleRate * 0.3) { toast("Too short, not kept"); return; }
+    if (x.length < ctx.sampleRate * 0.3) { toast("Too short, not kept"); setDisabled(); return; }
     const id = S.id + "-" + Date.now().toString(36);
     audioCache.set(id, x); await dbPut("audio", id, x);
     (S.takes[S.cur] ||= []).push({ id, sr: ctx.sampleRate, dur: x.length / ctx.sampleRate });
-    saveSession(); renderBooth(); renderList(); play(id);
+    saveSession(); renderStage(); renderTop();
+    if ($("#autoPlay").checked) play(id);
   }
 }
 
@@ -251,74 +275,84 @@ async function toggleRec() {
 let playing = null;
 function stopPlay() { if (playing) { try { playing.stop(); } catch {} playing = null; } }
 async function getAudio(id) { if (!audioCache.has(id)) { const a = await dbGet("audio", id); if (a) audioCache.set(id, a); } return audioCache.get(id); }
-async function play(id, then) {
-  stopPlay();
-  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-  if (ctx.state === "suspended") await ctx.resume();
-  const t = Object.values(S.takes).flat().find(t => t.id === id), x = await getAudio(id); if (!x) return;
-  const b = ctx.createBuffer(1, x.length, t.sr); b.copyToChannel(x, 0);
-  const s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.onended = () => { if (playing === s) { playing = null; then && then(); } };
+function takeById(id) { for (const ts of Object.values(S.takes)) for (const t of ts) if (t.id === id) return t; }
+async function playBuf(x, sr, then) {
+  stopPlay(); const c = audioCtx(); if (c.state === "suspended") await c.resume();
+  const b = c.createBuffer(1, x.length, sr); b.copyToChannel(x, 0);
+  const s = c.createBufferSource(); s.buffer = b; s.connect(c.destination);
+  s.onended = () => { if (playing === s) { playing = null; then && then(); } };
   s.start(); playing = s;
 }
+async function play(id) { const t = takeById(id), x = await getAudio(id); if (t && x) playBuf(x, t.sr); }
 const currentTake = i => { const ts = S.takes[i] || []; return ts.find(t => t.id === S.kept[i]) || ts[ts.length - 1]; };
 async function playFlow() {
   const prev = currentTake(S.cur - 1), cur = currentTake(S.cur); if (!cur) return;
   if (!prev) return play(cur.id);
-  stopPlay(); if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === "suspended") await ctx.resume();
-  const x = await getAudio(prev.id); const tail = x.slice(Math.max(0, x.length - prev.sr * 3));
-  const b = ctx.createBuffer(1, tail.length, prev.sr); b.copyToChannel(tail, 0);
-  const s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination);
-  s.onended = () => { if (playing === s) setTimeout(() => play(cur.id), Number($("#gap").value) || 0); };
-  s.start(); playing = s;
+  const x = await getAudio(prev.id), tail = x.slice(Math.max(0, x.length - prev.sr * 3));
+  playBuf(tail, prev.sr, () => setTimeout(() => play(cur.id), Number($("#gap").value) || 0));
 }
 
-// ---------- keep / navigate ----------
-function keep(id) { S.kept[S.cur] = id; saveSession(); renderList(); renderBooth(); }
-function go(i) { if (!S) return; stopPlay(); S.cur = Math.max(0, Math.min(S.lines.length - 1, i)); saveSession(); renderAll(); document.querySelector(".item.cur")?.scrollIntoView({ block: "nearest" }); }
-function keepAndNext() { const t = currentTake(S.cur); if (!t) { toast("Record this line first"); return; } keep(t.id); if (S.cur < S.lines.length - 1) go(S.cur + 1); else toast("Last line kept: export when ready"); }
-async function delTake(id) { const ts = S.takes[S.cur] || []; S.takes[S.cur] = ts.filter(t => t.id !== id); if (S.kept[S.cur] === id) delete S.kept[S.cur]; audioCache.delete(id); await dbDel("audio", id); saveSession(); renderAll(); }
+// ---------- navigation (never scrolls the page: only the stage resets to its top) ----------
+function go(i) { if (!S || recording) return; stopPlay(); S.cur = Math.max(0, Math.min(S.lines.length - 1, i)); saveSession(); renderAll(); $("#stage").scrollTop = 0; }
+function keep(id) { S.kept[S.cur] = id; saveSession(); renderStage(); renderTop(); }
+function keepAndNext() {
+  if (recording) return; const t = currentTake(S.cur); if (!t) { toast("Record this line first"); return; }
+  keep(t.id); buzz(10);
+  if (S.cur < S.lines.length - 1) go(S.cur + 1); else toast("Last line kept: export it from the Menu");
+}
+async function delTake(id) { S.takes[S.cur] = (S.takes[S.cur] || []).filter(t => t.id !== id); if (S.kept[S.cur] === id) delete S.kept[S.cur]; audioCache.delete(id); await dbDel("audio", id); saveSession(); renderStage(); renderTop(); }
 
 // ---------- render ----------
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function renderTop() {
+  const kept = S.lines.reduce((n, _, i) => n + ((S.takes[i] || []).some(t => t.id === S.kept[i]) ? 1 : 0), 0);
+  const tot = S.lines.reduce((s, _, i) => s + (currentTake(i)?.dur || 0), 0);
+  $("#title").textContent = S.title; document.title = S.title;
+  $("#prog").textContent = `${kept} / ${S.lines.length} kept · ${fmt(tot)}`;
+  $("#barFill").style.width = (100 * kept / S.lines.length) + "%";
+}
+function renderStage() {
+  const i = S.cur, ts = S.takes[i] || [];
+  $("#pos").textContent = `Line ${i + 1} of ${S.lines.length}`;
+  $("#est").textContent = `≈ ${Math.max(2, Math.round(S.lines[i].length / 12))} s`;
+  $("#prompter").textContent = S.lines[i];
+  const nx = $("#next"); nx.textContent = ""; if (S.lines[i + 1]) { nx.append(el("span", "lab", "Next"), S.lines[i + 1]); nx.hidden = false; } else nx.hidden = true;
+  const box = $("#takes"); box.textContent = "";
+  ts.forEach((t, k) => {
+    const kept = S.kept[i] === t.id, chip = el("div", "take" + (kept ? " kept" : ""));
+    const p = el("button", "", "▶"); p.type = "button"; p.setAttribute("aria-label", `Play take ${k + 1}`); p.onclick = () => play(t.id);
+    const kb = el("button", "", kept ? "Kept" : "Keep"); kb.type = "button"; kb.onclick = () => keep(t.id);
+    const d = el("button", "", "✕"); d.type = "button"; d.setAttribute("aria-label", `Delete take ${k + 1}`); d.onclick = () => delTake(t.id);
+    chip.append(el("span", "l", `Take ${k + 1}`), el("span", "d", `${t.dur.toFixed(1)} s`), p, kb, d); box.append(chip);
+  });
+  setDisabled();
+}
+function setDisabled() {
+  const has = !!(S && (S.takes[S.cur] || []).length);
+  $("#btnPlay").disabled = !has || recording; $("#btnKeep").disabled = !has || recording;
+  $("#btnPrev").disabled = recording || !S || S.cur === 0; $("#btnNext").disabled = recording || !S || S.cur >= S.lines.length - 1;
+}
 function renderList() {
   const L = $("#list"); L.textContent = "";
   S.lines.forEach((t, i) => {
-    const b = document.createElement("button"); b.className = "item" + (i === S.cur ? " cur" : ""); b.type = "button";
-    b.addEventListener("click", () => go(i));
-    const n = document.createElement("span"); n.className = "n"; n.textContent = i + 1;
-    const tx = document.createElement("span"); tx.className = "t"; tx.lang = "ar"; tx.textContent = t;
-    const d = document.createElement("span"); d.className = "dot" + (S.kept[i] ? " kept" : (S.takes[i]?.length ? " has" : ""));
-    d.title = S.kept[i] ? "kept" : (S.takes[i]?.length ? "recorded, not kept" : "not recorded");
-    b.append(n, tx, d); L.append(b);
+    const b = el("button", "item" + (i === S.cur ? " cur" : "")); b.type = "button"; b.onclick = () => { closeSheets(); go(i); };
+    const st = (S.takes[i] || []).some(x => x.id === S.kept[i]) ? "kept" : ((S.takes[i] || []).length ? "has" : "");
+    const tx = el("span", "tx", t); tx.lang = "ar";
+    b.append(el("span", "n", String(i + 1)), tx, el("span", "dot " + st)); L.append(b);
   });
-  const nk = Object.keys(S.kept).filter(i => S.takes[i]?.some(t => t.id === S.kept[i])).length;
-  $("#nKept").textContent = nk; $("#nLines").textContent = S.lines.length;
-  const tot = S.lines.reduce((s, _, i) => s + (currentTake(i)?.dur || 0), 0); $("#dur").textContent = fmt(tot);
-  $("#btnExport").disabled = $("#btnZip").disabled = !Object.keys(S.takes).some(i => S.takes[i].length);
 }
-function renderBooth() {
-  const i = S.cur, ts = S.takes[i] || [];
-  $("#pos").textContent = `Line ${i + 1} of ${S.lines.length}`;
-  $("#est").textContent = `about ${Math.max(2, Math.round(S.lines[i].length / 12))} s`;
-  $("#prompter").textContent = S.lines[i];
-  $("#next").textContent = S.lines[i + 1] || "";
-  $("#next").hidden = !S.lines[i + 1];
-  const box = $("#takes"); box.textContent = "";
-  ts.forEach((t, k) => {
-    const row = document.createElement("div"); row.className = "take" + (S.kept[i] === t.id ? " kept" : "");
-    const l = document.createElement("span"); l.className = "lbl"; l.textContent = `Take ${k + 1}`;
-    const d = document.createElement("span"); d.className = "d"; d.textContent = `${t.dur.toFixed(1)} s`;
-    const sp = document.createElement("span"); sp.className = "sp";
-    const p = document.createElement("button"); p.type = "button"; p.textContent = "Play"; p.addEventListener("click", () => play(t.id));
-    const kb = document.createElement("button"); kb.type = "button"; kb.textContent = S.kept[i] === t.id ? "Kept" : "Keep this"; kb.className = S.kept[i] === t.id ? "primary" : ""; kb.addEventListener("click", () => keep(t.id));
-    const del = document.createElement("button"); del.type = "button"; del.textContent = "Delete"; del.addEventListener("click", () => delTake(t.id));
-    row.append(l, d, sp, p, kb, del); box.append(row);
-  });
-  const has = ts.length > 0;
-  $("#btnPlay").disabled = $("#btnKeep").disabled = !has; $("#btnFlow").disabled = !has || !currentTake(i - 1);
-}
-function renderAll() { $("#title").textContent = S.title; document.title = S.title; renderList(); renderBooth(); }
+function renderAll() { renderTop(); renderStage(); }
 
-// ---------- export (lossless WAV, 24-bit, the browser's recording rate; joins only, no processing) ----------
+// ---------- sheets ----------
+function openSheet(id) {
+  closeSheets(); $("#scrim").hidden = false; $(id).hidden = false;
+  if (id === "#sheetLines") { renderList(); const c = $("#list .item.cur"); if (c) { const L = $("#list"); L.scrollTop = c.offsetTop - L.clientHeight / 2 + c.clientHeight / 2; } }
+}
+function closeSheets() { $("#scrim").hidden = true; document.querySelectorAll(".sheet").forEach(s => s.hidden = true); }
+$("#scrim").onclick = () => { if (S) closeSheets(); };
+document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => { if (S) closeSheets(); });
+
+// ---------- export: 24-bit WAV at the recording rate; only joins, no processing ----------
 function wav24(x, sr) {
   const n = x.length, buf = new ArrayBuffer(44 + n * 3), v = new DataView(buf);
   const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
@@ -328,53 +362,50 @@ function wav24(x, sr) {
   for (let i = 0, o = 44; i < n; i++, o += 3) { const s = Math.max(-1, Math.min(1, x[i])); const q = Math.round(s < 0 ? s * 8388608 : s * 8388607); v.setUint8(o, q & 255); v.setUint8(o + 1, (q >> 8) & 255); v.setUint8(o + 2, (q >> 16) & 255); }
   return new Blob([buf], { type: "audio/wav" });
 }
-function download(blob, name) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); }
+function download(blob, name) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000); }
 const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
-const safe = s => { const a = (s || "").replace(/[^A-Za-z0-9 _-]+/g, "").trim().replace(/ +/g, "_").slice(0, 40); return (a || "narration") + "_" + stamp(); };
-async function picked() {
-  const out = [], missing = [];
-  for (let i = 0; i < S.lines.length; i++) { const t = currentTake(i); if (!t) { missing.push(i + 1); continue; } out.push({ i, t, x: await getAudio(t.id) }); }
-  return { out, missing };
-}
-$("#btnExport").addEventListener("click", async () => {
-  const { out, missing } = await picked(); if (!out.length) return;
-  const sr = out[0].t.sr; if (out.some(o => o.t.sr !== sr)) { toast("Takes were recorded at different rates: export lines instead"); return; }
+const fileBase = () => { const a = (S.title || "").replace(/[^A-Za-z0-9 _-]+/g, "").trim().replace(/ +/g, "_").slice(0, 40); return (a || "narration") + "_" + stamp(); };
+async function pickedTakes() { const out = [], missing = []; for (let i = 0; i < S.lines.length; i++) { const t = currentTake(i); if (!t) { missing.push(i + 1); continue; } out.push({ i, t, x: await getAudio(t.id) }); } return { out, missing }; }
+$("#btnExport").onclick = async () => {
+  const { out, missing } = await pickedTakes(); if (!out.length) { toast("Nothing recorded yet"); return; }
+  const sr = out[0].t.sr; if (out.some(o => o.t.sr !== sr)) { toast("Takes have different sample rates: use Export lines"); return; }
   const gap = Math.round(sr * (Number($("#gap").value) || 0) / 1000);
-  const len = out.reduce((n, o) => n + o.x.length, 0) + gap * (out.length - 1), y = new Float32Array(len); let p = 0;
+  const y = new Float32Array(out.reduce((n, o) => n + o.x.length, 0) + gap * (out.length - 1)); let p = 0;
   out.forEach((o, k) => { y.set(o.x, p); p += o.x.length + (k < out.length - 1 ? gap : 0); });
-  download(wav24(y, sr), `${safe(S.title)}.wav`);
-  toast(missing.length ? `Exported; lines not recorded: ${missing.join(", ")}` : "Exported");
-});
-$("#btnZip").addEventListener("click", async () => {
-  if (!window.JSZip) { toast("Zip needs an internet connection: use Export narration"); return; }
-  const { out } = await picked(); const z = new JSZip();
-  out.forEach(o => z.file(`${String(o.i + 1).padStart(3, "0")}.wav`, wav24(o.x, o.t.sr)));
+  download(wav24(y, sr), `${fileBase()}.wav`);
+  $("#exportNote").textContent = missing.length ? `Exported. Lines not recorded yet: ${missing.join(", ")}.` : "Exported. Upload the WAV to rvc_project/input in Google Drive.";
+};
+$("#btnZip").onclick = async () => {
+  if (!window.JSZip) { toast("Zip needs internet: use Export narration"); return; }
+  const { out } = await pickedTakes(); if (!out.length) { toast("Nothing recorded yet"); return; }
+  const z = new JSZip(); out.forEach(o => z.file(`${String(o.i + 1).padStart(3, "0")}.wav`, wav24(o.x, o.t.sr)));
   z.file("lines.json", JSON.stringify({ title: S.title, lines: S.lines.map((t, i) => ({ n: i + 1, text: t, file: currentTake(i) ? `${String(i + 1).padStart(3, "0")}.wav` : null })) }, null, 1));
-  download(await z.generateAsync({ type: "blob" }), `${safe(S.title)}_lines.zip`); toast("Exported");
-});
+  download(await z.generateAsync({ type: "blob" }), `${fileBase()}_lines.zip`);
+};
 
 // ---------- wiring ----------
-$("#btnRec").addEventListener("click", toggleRec);
-$("#btnPlay").addEventListener("click", () => { const t = currentTake(S.cur); t && play(t.id); });
-$("#btnFlow").addEventListener("click", playFlow);
-$("#btnKeep").addEventListener("click", keepAndNext);
-$("#btnScript").addEventListener("click", () => { const h = !$("#setup").hidden; $("#setup").hidden = h; $("#setupWarn").hidden = !S; if (S && !$("#scriptIn").value) $("#scriptIn").value = S.lines.join("\n\n"); });
-$("#scriptFile").addEventListener("change", async e => {
-  const f = e.target.files[0]; if (!f) return;
-  $("#scriptIn").value = await f.text();
-  loadScript(f.name.replace(/\.[^.]+$/, ""), $("#scriptIn").value, Number($("#maxChars").value) || 160, $("#byPara").checked);
-});
-$("#btnLoad").addEventListener("click", () => loadScript(S?.title, $("#scriptIn").value, Number($("#maxChars").value) || 160, $("#byPara").checked));
-document.addEventListener("keydown", e => {
-  if (!S || e.target.closest("textarea, input")) return;
+$("#btnRec").onclick = toggleRec;
+$("#btnPlay").onclick = () => { const t = currentTake(S.cur); t && play(t.id); };
+$("#btnKeep").onclick = keepAndNext;
+$("#btnPrev").onclick = () => go(S.cur - 1);
+$("#btnNext").onclick = () => go(S.cur + 1);
+$("#btnLines").onclick = () => S && openSheet("#sheetLines");
+$("#btnMenu").onclick = () => S && openSheet("#sheetMenu");
+$("#btnPlayFlow").onclick = () => { closeSheets(); playFlow(); };
+$("#btnScript").onclick = () => { openSheet("#sheetScript"); if (!$("#scriptIn").value && S) $("#scriptIn").value = S.lines.join("\n\n"); };
+$("#scriptFile").onchange = async e => { const f = e.target.files[0]; if (!f) return; const txt = await f.text(); $("#scriptIn").value = txt; loadScript(titleOf(txt) || f.name.replace(/\.[^.]+$/, ""), txt, Number($("#maxChars").value) || 160, $("#byPara").checked); };
+$("#btnLoad").onclick = () => loadScript(titleOf($("#scriptIn").value), $("#scriptIn").value, Number($("#maxChars").value) || 160, $("#byPara").checked);
+const prefs = ["trim", "autoPlay"]; for (const k of prefs) { try { const v = localStorage.getItem("booth-" + k); if (v !== null) $("#" + k).checked = v === "1"; } catch {} $("#" + k).onchange = e => { try { localStorage.setItem("booth-" + k, e.target.checked ? "1" : "0"); } catch {} }; }
+try { const g = localStorage.getItem("booth-gap"); if (g) $("#gap").value = g; } catch {} $("#gap").onchange = e => { try { localStorage.setItem("booth-gap", e.target.value); } catch {} };
+document.addEventListener("keydown", e => {   // desktop keys
+  if (!S || e.target.closest("textarea, input") || !$("#scrim").hidden) return;
   const k = e.key.toLowerCase();
   if (k === "r" || (k === " " && !e.target.closest("button"))) { e.preventDefault(); toggleRec(); }
-  else if (k === "p") { const t = currentTake(S.cur); t && play(t.id); }
+  else if (k === "p") $("#btnPlay").click();
   else if (k === "f") playFlow();
-  else if (k === "enter" && !e.target.closest("button")) { e.preventDefault(); if (!recording) keepAndNext(); }
-  else if (k === "arrowdown" || k === "arrowleft") { e.preventDefault(); if (!recording) go(S.cur + 1); }
-  else if (k === "arrowup" || k === "arrowright") { e.preventDefault(); if (!recording) go(S.cur - 1); }
-  else if (k === "delete" || k === "backspace") { const ts = S.takes[S.cur] || []; if (ts.length && !recording) delTake(ts[ts.length - 1].id); }
+  else if (k === "enter" && !e.target.closest("button")) { e.preventDefault(); keepAndNext(); }
+  else if (k === "arrowright" || k === "arrowdown") { e.preventDefault(); go(S.cur + 1); }
+  else if (k === "arrowleft" || k === "arrowup") { e.preventDefault(); go(S.cur - 1); }
 });
 
 (async () => {
@@ -385,7 +416,8 @@ document.addEventListener("keydown", e => {
   let last = null; try { last = localStorage.getItem("booth-last"); } catch {}
   const s = last && await dbGet("sessions", last);
   if (s) { S = s; renderAll(); return; }
-  $("#main").hidden = true; $("#setup").hidden = false;
+  $("#prompter").textContent = ""; note("Load a script to start.");
+  openSheet("#sheetScript"); $("#scriptClose").hidden = true;
 })();
 </script>
 </body>
